@@ -209,6 +209,9 @@ SUBROUTINE pcdiaghg( n, h, s, ldh, e, v, desc )
   USE mp_diag,          ONLY : ortho_cntx, me_blacs, np_ortho, me_ortho, ortho_comm
   USE zhpev_module,     ONLY : pzheevd_drv
 #endif
+#if defined(__VERBOSE)
+  USE io_global, ONLY : stdout
+#endif
 
   !
   IMPLICIT NONE
@@ -268,6 +271,12 @@ SUBROUTINE pcdiaghg( n, h, s, ldh, e, v, desc )
 #if defined __SCALAPACK
 
      CALL pzpotrf( 'L', n, ss, 1, 1, descsca, info )
+
+     ! qiaojunfeng
+#if defined(__VERBOSE)
+     IF( info /= 0 ) WRITE( stdout, '( "INFO in PZPOTRF of ScaLAPACK:" I6 )' ) info
+#endif
+     ! qiaojunfeng end
 
      IF( info /= 0 ) CALL errore( ' cdiaghg ', ' problems computing cholesky ', ABS( info ) )
 #else
