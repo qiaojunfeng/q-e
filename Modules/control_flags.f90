@@ -196,6 +196,7 @@ MODULE control_flags
     isolve,           &! Davidson or CG or RMM-DIIS diagonalization
     david,            &! max dimension of subspace in Davidson diagonalization
     max_cg_iter,      &! maximum number of iterations in a CG call
+    max_dav_iter,     &! maximum number of iterations in a DAV call
     rmm_ndim,         &! max dimension of subspace in RMM-DIIS diagonalization
     gs_nblock          ! blocking size in Gram-Schmidt orthogonalization
   LOGICAL, PUBLIC :: &

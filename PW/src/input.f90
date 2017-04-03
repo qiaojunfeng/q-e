@@ -148,6 +148,7 @@ SUBROUTINE iosys()
   !
   USE extrapolation, ONLY : pot_order, wfc_order
   USE control_flags, ONLY : isolve, max_cg_iter, david, &
+                            max_dav_iter, &
                             rmm_ndim, rmm_conv, gs_nblock, &
                             tr2, imix, gamma_only, &
                             nmix, iverbosity, niter, &
@@ -262,6 +263,7 @@ SUBROUTINE iosys()
   ! ... ELECTRONS namelist
   !
   USE input_parameters, ONLY : electron_maxstep, mixing_mode, mixing_beta, &
+                               diago_dav_maxiter,                  &
                                mixing_ndim, mixing_fixed_ns, conv_thr,     &
                                tqr, tq_smoothing, tbeta_smoothing,         &
                                diago_thr_init, diago_cg_maxiter,           &
@@ -939,6 +941,7 @@ SUBROUTINE iosys()
      !
      isolve = 0
      david = diago_david_ndim
+     max_dav_iter = diago_dav_maxiter
      !
   CASE ( 'rmm', 'rmm-diis' )
      !

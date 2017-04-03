@@ -824,6 +824,10 @@ MODULE input_parameters
           ! max number of iterations for the first iterative diagonalization
           ! using conjugate-gradient algorithm - used only in PWscf
 
+        INTEGER :: diago_dav_maxiter = 20
+          ! max number of iterations for the davidson iterative diagonalization
+          ! using dav algorithm - used only in PWscf
+
         INTEGER :: diago_david_ndim = 4
           ! dimension of the subspace used in Davidson diagonalization
           ! used only in PWscf
@@ -974,6 +978,7 @@ MODULE input_parameters
           mixing_mode, mixing_beta, mixing_ndim, mixing_fixed_ns,      &
           tqr, tq_smoothing, tbeta_smoothing,                          &
           diago_cg_maxiter, diago_david_ndim, diago_rmm_ndim,          &
+          diago_dav_maxiter,                                           &
           diago_rmm_conv, diago_gs_nblock, diagonalization,            &
           startingpot, startingwfc , conv_thr,                         &
           adaptive_thr, conv_thr_init, conv_thr_multi,                 &

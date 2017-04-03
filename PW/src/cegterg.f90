@@ -24,6 +24,10 @@ SUBROUTINE cegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
   USE kinds,         ONLY : DP
   USE mp_bands,      ONLY : intra_bgrp_comm, inter_bgrp_comm, root_bgrp_id, nbgrp, my_bgrp_id
   USE mp,            ONLY : mp_sum, mp_bcast
+  USE control_flags,    ONLY : max_dav_iter
+#if defined(__VERBOSE)
+  USE io_global, ONLY : stdout
+#endif
   !
   IMPLICIT NONE
   !
@@ -54,7 +58,8 @@ SUBROUTINE cegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
   !
   ! ... LOCAL variables
   !
-  INTEGER, PARAMETER :: maxter = 20
+  !INTEGER, PARAMETER :: maxter = 20
+  INTEGER :: maxter = 20
     ! maximum number of iterations
   !
   INTEGER :: kter, nbase, np, kdim, kdmx, n, m, nb1, nbn
@@ -212,6 +217,8 @@ SUBROUTINE cegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
   !
   ! ... iterate
   !
+  maxter = max_dav_iter
+
   iterate: DO kter = 1, maxter
      !
      dav_iter = kter
@@ -409,8 +416,10 @@ SUBROUTINE cegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
            !
            ! ... last iteration, some roots not converged: return
            !
-           !!!WRITE( stdout, '(5X,"WARNING: ",I5, &
-           !!!     &   " eigenvalues not converged")' ) notcnv
+#if defined(__VERBOSE)
+              WRITE( stdout, '(5X,"WARNING: ",I5, &
+                   &   " eigenvalues not converged")' ) notcnv
+#endif
            !
            CALL stop_clock( 'cegterg:last' )
            !
@@ -501,6 +510,7 @@ SUBROUTINE pcegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
   USE descriptors,      ONLY : la_descriptor, descla_init , descla_local_dims
   USE parallel_toolkit, ONLY : zsqmred, zsqmher, zsqmdst
   USE mp,               ONLY : mp_bcast, mp_root_sum, mp_sum, mp_barrier
+  USE control_flags,    ONLY : max_dav_iter
   !
   IMPLICIT NONE
   !
@@ -530,7 +540,8 @@ SUBROUTINE pcegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
   !
   ! ... LOCAL variables
   !
-  INTEGER, PARAMETER :: maxter = 20
+  !INTEGER, PARAMETER :: maxter = 20
+  INTEGER :: maxter = 20
     ! maximum number of iterations
   !
   INTEGER :: kter, nbase, np, kdim, kdmx, n, nb1, nbn
@@ -735,6 +746,8 @@ SUBROUTINE pcegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
   !
   ! ... iterate
   !
+  maxter = max_dav_iter
+
   iterate: DO kter = 1, maxter
      !
      dav_iter = kter
@@ -901,8 +914,10 @@ SUBROUTINE pcegterg( npw, npwx, nvec, nvecx, npol, evc, ethr, &
            !
            ! ... last iteration, some roots not converged: return
            !
-           !!!WRITE( stdout, '(5X,"WARNING: ",I5, &
-           !!!     &   " eigenvalues not converged")' ) notcnv
+#if defined(__VERBOSE)
+              WRITE( stdout, '(5X,"WARNING: ",I5, &
+                   &   " eigenvalues not converged")' ) notcnv
+#endif
            !
            CALL stop_clock( 'cegterg:last' )
            !

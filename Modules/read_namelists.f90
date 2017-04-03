@@ -361,6 +361,9 @@ MODULE read_namelists_module
        mixing_ndim = 8
        diagonalization = 'david'
        diago_thr_init = 0.0_DP
+
+       IF( prog == 'PW' ) diago_dav_maxiter = 20
+
        diago_cg_maxiter = 20
        diago_david_ndim = 4
        diago_rmm_ndim = 6
@@ -951,6 +954,9 @@ MODULE read_namelists_module
        CALL mp_bcast( tbeta_smoothing,      ionode_id, intra_image_comm )
        CALL mp_bcast( diagonalization,      ionode_id, intra_image_comm )
        CALL mp_bcast( diago_thr_init,       ionode_id, intra_image_comm )
+
+       CALL mp_bcast( diago_dav_maxiter,    ionode_id, intra_image_comm )
+
        CALL mp_bcast( diago_cg_maxiter,     ionode_id, intra_image_comm )
        CALL mp_bcast( diago_david_ndim,     ionode_id, intra_image_comm )
        CALL mp_bcast( diago_rmm_ndim,       ionode_id, intra_image_comm )
