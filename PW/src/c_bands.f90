@@ -780,7 +780,10 @@ SUBROUTINE c_bands_nscf( )
      !
      ! ... save wave-functions (unless disabled in input)
      !
-     IF ( io_level > -1 ) CALL save_buffer ( evc, nwordwfc, iunwfc, ik )
+     ! qiaojunfeng
+     ! do not save wave function, it is too large.
+     !IF ( io_level > -1 ) CALL save_buffer ( evc, nwordwfc, iunwfc, ik )
+     ! qiaojunfeng
      !
      ! ... beware: with pools, if the number of k-points on different
      ! ... pools differs, make sure that all processors are still in
