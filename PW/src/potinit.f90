@@ -275,6 +275,10 @@ SUBROUTINE nc_magnetization_from_lsda ( nnr, nspin, rho )
   USE io_global, ONLY: stdout
   USE noncollin_module, ONLY: angle1, angle2, pointlist
   USE ions_base,        ONLY: ityp, ntyp => nsp
+  USE fft_base,         ONLY: dfftp
+#if defined(__VERBOSE)
+  USE mp_world,         ONLY: mpime
+#endif
   !
   IMPLICIT NONE
   INTEGER, INTENT (in):: nnr, nspin
@@ -282,6 +286,9 @@ SUBROUTINE nc_magnetization_from_lsda ( nnr, nspin, rho )
   ! tmp variables
   integer   :: i
   real (dp) :: ang1, ang2
+#if defined(__VERBOSE)
+  character(len=128) :: filename
+#endif
   !---  
   !  set up noncollinear m_x,y,z from collinear m_z (AlexS) 
   !
@@ -293,6 +300,19 @@ SUBROUTINE nc_magnetization_from_lsda ( nnr, nspin, rho )
          &     i, angle1(i)/PI*180.d0, angle2(i)/PI*180.d0
   end do
   WRITE(stdout,*) '-----------'
+  !
+#if defined(__VERBOSE)
+  ! write out pointlist for testing
+  write ( filename, '(i5)') mpime
+  open ( 64, file='pointlist.dat'//trim(ADJUSTL(filename)), &
+        & form='formatted', status='unknown' )
+  ! size of the matrix
+  write ( 64, '(4i4)' ) dfftp%nr1, dfftp%nr2, dfftp%nr3
+  do i = 1, nnr
+    write ( 64, '(i3)' ) pointlist(i)
+  end do
+  close( 64 )
+#endif
   !
   ! On input, rho(1)=rho_up, rho(2)=rho_down
   ! Set rho(1)=rho_tot, rho(3)=rho_up-rho_down=magnetization
