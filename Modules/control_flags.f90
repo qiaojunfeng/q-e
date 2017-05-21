@@ -228,6 +228,8 @@ MODULE control_flags
   !
   INTEGER, PUBLIC :: &
     io_level = 1       ! variable controlling the amount of I/O to file
+  LOGICAL, PUBLIC  :: &
+    savewf   = .TRUE.  ! if .TRUE. save wavefunctions to files
   INTEGER, PUBLIC :: & ! variable controlling the amount of I/O to output
     iverbosity = 0     ! -1 minimal, 0 low, 1 medium, 2 high, 3 debug
   !

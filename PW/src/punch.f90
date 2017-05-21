@@ -15,7 +15,7 @@ SUBROUTINE punch( what )
   USE io_global,            ONLY : stdout, ionode
   USE io_files,             ONLY : iunpun, iunwfc, nwordwfc, diropn, &
        tmp_dir, prefix
-  USE control_flags,        ONLY : io_level, twfcollect, io_level, lscf
+  USE control_flags,        ONLY : io_level, twfcollect, io_level, lscf, savewf
   USE klist,                ONLY : nks
   USE io_files,             ONLY : xmlpun_schema, psfile, pseudo_dir
   USE wrappers,             ONLY : f_copy
@@ -51,11 +51,13 @@ SUBROUTINE punch( what )
   ! ... if wavefunctions are stored in "distributed" format,
   ! ... save here wavefunctions to file if never saved before
   !
-  IF ( .NOT. twfcollect .AND. nks == 1 ) THEN
-     IF (io_level < 1) CALL diropn( iunwfc, 'wfc', 2*nwordwfc, exst )
-     CALL davcio ( evc, 2*nwordwfc, iunwfc, nks, 1 )
-     IF (io_level < 1) CLOSE ( UNIT=iunwfc, STATUS='keep' )
-  END IF
+  if ( savewf ) then
+    IF ( .NOT. twfcollect .AND. nks == 1 ) THEN
+       IF (io_level < 1) CALL diropn( iunwfc, 'wfc', 2*nwordwfc, exst )
+       CALL davcio ( evc, 2*nwordwfc, iunwfc, nks, 1 )
+       IF (io_level < 1) CLOSE ( UNIT=iunwfc, STATUS='keep' )
+    END IF
+  end if
   iunpun = 4
   !
 #if defined(__XSD)

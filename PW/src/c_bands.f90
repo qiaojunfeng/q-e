@@ -700,6 +700,7 @@ SUBROUTINE c_bands_nscf( )
   USE gvect,                ONLY : g
   USE wvfct,                ONLY : et, nbnd, npwx, current_k
   USE control_flags,        ONLY : ethr, restart, isolve, io_level, iverbosity
+  USE control_flags,        ONLY : savewf
   USE ldaU,                 ONLY : lda_plus_u, U_projection, wfcU
   USE lsda_mod,             ONLY : current_spin, lsda, isk
   USE wavefunctions_module, ONLY : evc
@@ -782,7 +783,9 @@ SUBROUTINE c_bands_nscf( )
      !
      ! qiaojunfeng
      ! do not save wave function, it is too large.
-     !IF ( io_level > -1 ) CALL save_buffer ( evc, nwordwfc, iunwfc, ik )
+     if ( savewf ) then
+       IF ( io_level > -1 ) CALL save_buffer ( evc, nwordwfc, iunwfc, ik )
+     end if
      ! qiaojunfeng
      !
      ! ... beware: with pools, if the number of k-points on different

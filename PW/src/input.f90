@@ -223,7 +223,8 @@ SUBROUTINE iosys()
                                gdir, nppstr, wf_collect,lelfield,lorbm,efield, &
                                nberrycyc, lkpoint_dir, efield_cart, lecrpa,    &
                                vdw_table_name, memory, tqmmm,                  &
-                               efield_phase, monopole
+                               efield_phase, monopole,                         &
+                               savewf
 
   !
   ! ... SYSTEM namelist

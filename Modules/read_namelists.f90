@@ -126,6 +126,7 @@ MODULE read_namelists_module
        tqmmm = .FALSE.
        !
        saverho = .TRUE.
+       savewf = .TRUE.
        memory = 'default'
        !
        lfcpopt = .FALSE.
@@ -721,6 +722,7 @@ MODULE read_namelists_module
        CALL mp_bcast( lorbm,         ionode_id, intra_image_comm )
        CALL mp_bcast( nberrycyc,     ionode_id, intra_image_comm )
        CALL mp_bcast( saverho,       ionode_id, intra_image_comm )
+       CALL mp_bcast( savewf,        ionode_id, intra_image_comm )
        CALL mp_bcast( lecrpa,        ionode_id, intra_image_comm )
        CALL mp_bcast( tqmmm,         ionode_id, intra_image_comm )
        CALL mp_bcast( vdw_table_name,ionode_id, intra_image_comm )

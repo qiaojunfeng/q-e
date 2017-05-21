@@ -15,7 +15,7 @@
   USE kinds,                ONLY : DP
   USE bp,                   ONLY : lelfield, lberry, lorbm
   USE check_stop,           ONLY : stopped_by_user
-  USE control_flags,        ONLY : io_level, conv_elec, lbands
+  USE control_flags,        ONLY : io_level, conv_elec, lbands, savewf
   USE ener,                 ONLY : ef
   USE io_global,            ONLY : stdout, ionode
   USE io_files,             ONLY : iunwfc, nwordwfc, iunefield
@@ -91,8 +91,10 @@
   ! ... save converged wfc if they have not been written previously
   ! ... FIXME: it shouldn't be necessary to do this here
   !
-  IF ( nks == 1 .AND. (io_level < 2) .AND. (io_level > -1) ) &
-        CALL save_buffer ( evc, nwordwfc, iunwfc, nks )
+  if ( savewf ) then
+    IF ( nks == 1 .AND. (io_level < 2) .AND. (io_level > -1) ) &
+          CALL save_buffer ( evc, nwordwfc, iunwfc, nks )
+  end if
   !
   ! ... do a Berry phase polarization calculation if required
   !

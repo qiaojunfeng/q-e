@@ -239,6 +239,11 @@ MODULE input_parameters
           !          files
           ! Only for PW and only in the parallel case
 
+        LOGICAL :: savewf = .true.
+          ! This flag controls whether save the wavefunctions to disk or not.
+          !  .TRUE.  save wavefunctions to disk
+          !  .FALSE. do not save wavefunctions
+
         LOGICAL :: saverho = .true.
           ! This flag controls the saving of charge density in CP codes:
           !  .TRUE.  save charge density to restart dir
@@ -283,6 +288,7 @@ MODULE input_parameters
           prefix, wfcdir, max_seconds, ekin_conv_thr, etot_conv_thr,      &
           forc_conv_thr, pseudo_dir, disk_io, tefield, dipfield, lberry,  &
           gdir, nppstr, wf_collect, lelfield, nberrycyc, refg,            &
+          savewf, &
           tefield2, saverho, tabps, lkpoint_dir, use_wannier, lecrpa,     &
           tqmmm, vdw_table_name, lorbm, memory, point_label_type,         &
           lfcpopt, lfcpdyn, input_xml_schema_file, monopole
