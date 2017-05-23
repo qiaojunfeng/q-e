@@ -265,22 +265,33 @@ END SUBROUTINE potinit
 !-------------
 SUBROUTINE nc_magnetization_from_lsda ( nnr, nspin, rho )
   !-------------
+  ! Junfeng Qiao, 19/5/2017
+  ! original version rotated the whole charge density according to only angle1,
+  ! this version make it possible to rotate paticular parts of charge density
+  ! according to angle1, angle2, ... from input file.
   !
   USE kinds,     ONLY: dp
   USE constants, ONLY: pi
   USE io_global, ONLY: stdout
-  USE noncollin_module, ONLY: angle1, angle2
+  USE noncollin_module, ONLY: angle1, angle2, pointlist
+  USE ions_base,        ONLY: ityp, ntyp => nsp
   !
   IMPLICIT NONE
   INTEGER, INTENT (in):: nnr, nspin
   REAL(dp), INTENT (inout):: rho(nnr,nspin)
+  ! tmp variables
+  integer   :: i
+  real (dp) :: ang1, ang2
   !---  
   !  set up noncollinear m_x,y,z from collinear m_z (AlexS) 
   !
   WRITE(stdout,*)
   WRITE(stdout,*) '-----------'
-  WRITE(stdout,'("Spin angles Theta, Phi (degree) = ",2f8.4)') &
-       angle1(1)/PI*180.d0, angle2(1)/PI*180.d0 
+  do i = 1, ntyp
+    WRITE(stdout,'("Spin angles for atom type ", i2, &
+         &           ": Theta, Phi (degree) = ",2f8.4)') &
+         &     i, angle1(i)/PI*180.d0, angle2(i)/PI*180.d0
+  end do
   WRITE(stdout,*) '-----------'
   !
   ! On input, rho(1)=rho_up, rho(2)=rho_down
@@ -293,10 +304,16 @@ SUBROUTINE nc_magnetization_from_lsda ( nnr, nspin, rho )
   !         rho(3)=magn*sin(theta)*sin(phi)   y
   !         rho(4)=magn*cos(theta)            z
   !
-  rho(:,4) = rho(:,3)*cos(angle1(1))
-  rho(:,2) = rho(:,3)*sin(angle1(1))
-  rho(:,3) = rho(:,2)*sin(angle2(1))
-  rho(:,2) = rho(:,2)*cos(angle2(1))
+  do i = 1, nnr
+    ! refer to make_pointlists.f90 for details of pointlist
+    ang1 = angle1( ityp( pointlist(i) ) )
+    ang2 = angle2( ityp( pointlist(i) ) )
+
+    rho(i,4) = rho(i,3)*cos(ang1)
+    rho(i,2) = rho(i,3)*sin(ang1)
+    rho(i,3) = rho(i,2)*sin(ang2)
+    rho(i,2) = rho(i,2)*cos(ang2)
+  end do
   !
   RETURN
   !
