@@ -14,3 +14,8 @@ install/config.log
 install/config.status
 install/configure.msg
 /bin/
+.cproject
+.project
+.settings/
+Examples/
+Doc/
