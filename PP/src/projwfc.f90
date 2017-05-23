@@ -834,6 +834,7 @@ SUBROUTINE projwave_nc(filproj, lsym, lwrite_ovp, lbinary, ef_0 )
   COMPLEX(DP) :: d012(2, 2, 48), d112(6, 6, 48), d212(10, 10, 48), &
                       d312(14, 14, 48)
   !
+  REAL(DP), EXTERNAL :: get_clock
   !
   !
   IF (.not.noncolin) CALL errore('projwave_nc','called in the wrong case',1)
@@ -904,6 +905,11 @@ SUBROUTINE projwave_nc(filproj, lsym, lwrite_ovp, lbinary, ef_0 )
   !    loop on k points
   !
   DO ik = 1, nks
+
+     WRITE( stdout, 9001 ) ik
+     WRITE( stdout, 9000 ) get_clock( 'PROJWFC' )
+     FLUSH( stdout )
+
      wfcatom = (0.d0,0.d0)
      swfcatom= (0.d0,0.d0)
      npw = ngk(ik)
@@ -1188,6 +1194,10 @@ IF ( ionode ) THEN
  DEALLOCATE (eband_proj)
  RETURN
 ENDIF
+
+9001 FORMAT(/'     Computing kpt #: ',I5 )
+9000 FORMAT( '     total cpu time spent up to now is ',F10.1,' secs' )
+
 !--
 
   DEALLOCATE (work)
