@@ -19,3 +19,6 @@ install/configure.msg
 .settings/
 Examples/
 Doc/
+atomic/examples
+atomic/examples/pseudo-gen
+tempdir/
