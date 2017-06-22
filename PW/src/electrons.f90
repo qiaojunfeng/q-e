@@ -1101,7 +1101,8 @@ SUBROUTINE electrons_scf ( printout, exxen )
        !
    
        IF ( printout == 0 ) RETURN
-       IF ( ( conv_elec .OR. MOD(iter,iprint) == 0 ) .AND. printout > 1 ) THEN
+       !IF ( ( conv_elec .OR. MOD(iter,iprint) == 0 ) .AND. printout > 1 ) THEN
+       IF (.TRUE.) THEN
           !
           IF ( dr2 > eps8 ) THEN
              WRITE( stdout, 9081 ) etot, hwf_energy, dr2

@@ -224,6 +224,7 @@ stres_nonloc_dft.o \
 stress.o \
 struct_fact.o \
 sum_band.o \
+sum_band_no_weights.o \
 sumkg.o \
 sumkt.o \
 summary.o \
