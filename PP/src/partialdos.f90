@@ -564,7 +564,7 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos)
            WRITE (4,'(i5," ")', advance="NO") ik
         ENDIF
         etev = Emin + ie * DeltaE
-        WRITE (4,'(f7.3,4e11.3)') etev*rytoev, dostot(ie,ik), &
+        WRITE (4,'(f7.3,4e18.10)') etev*rytoev, dostot(ie,ik), &
              (pdostot(ie,is,ik), is=1,nspin0)
      ENDDO
      IF (kresolveddos) WRITE (4,*)
