@@ -261,6 +261,7 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
         !    If we have a US pseudopotential we compute here the becsum term
         !
               w1 = wg (ibnd, ik)
+              w1 = w1 * et (ibnd, ik) ! now this integrate on energy
               ijkb0 = 0
               DO np = 1, ntyp
                 IF (upf(np)%tvanp  ) THEN

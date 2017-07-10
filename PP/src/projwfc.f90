@@ -233,7 +233,7 @@ ELSE
         CALL partialdos_boxes (Emin, Emax, DeltaE, kresolveddos, filpdos, n_proj_boxes)
      ELSE IF ( lsym .OR. kresolveddos ) THEN
         IF (noncolin) THEN
-           CALL partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos)
+           CALL partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
         ELSE
            CALL partialdos (Emin, Emax, DeltaE, kresolveddos, filpdos)
         ENDIF
