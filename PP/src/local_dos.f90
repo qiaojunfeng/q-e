@@ -128,9 +128,7 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
                 / degauss, ngauss)
         ELSEIF (iflag == 3) THEN
            IF (et (ibnd, ik) <=  emax .and. et (ibnd, ik) >= emin) THEN
-              !write(*, '("wk(ik) = ",e14.6,", et(ibnd,ik) = ",e18.10)') wk(ik), et(ibnd,ik)
-              wg (ibnd, ik) = wk (ik) !* et (ibnd, ik) ! now this integrate on energy
-              !write(*, '("wg(ibnd,ik) = ",e18.10)') wg(ibnd,ik)
+              wg (ibnd, ik) = wk (ik)
            ELSE
               wg (ibnd, ik) = 0.d0
            ENDIF
@@ -140,7 +138,6 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
      ENDDO
   ENDDO
   wg_max = MAXVAL(wg(:,:))
-  !write(*, '("npol = ", i10, "   wg_max = ", e18.10)') npol, wg_max
 
   IF ( iflag == 0 .and. npool > 1 ) THEN
      CALL xk_pool( kpoint, nkstot, kpoint_pool,  which_pool )
@@ -199,8 +196,7 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
                  ENDIF
                  CALL invfft ('Wave', psic, dffts)
               ENDIF
-              w1 = wg (ibnd, ik) ! / omega  ! we do not need per volume
-              w1 = w1 * et (ibnd, ik) ! now this integrate on energy
+              w1 = wg (ibnd, ik) / omega
 !
 !  Compute and save the sign of the wavefunction at the gamma point
 !
@@ -247,8 +243,6 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
                        rho%of_r(ir,current_spin)=rho%of_r(ir,current_spin)+&
                           w1*(dble(psic_nc(ir,ipol))**2+ &
                              aimag(psic_nc(ir,ipol))**2)
-                 !write(*, '("ik=",i4,"ibnd=",i4,"ir=",i5,"curspin=",i2,"rho%of_r(ir,current_spin) = ",e18.10)') &
-                  !    ik, ibnd, ir, current_spin, rho%of_r(ir,current_spin)
                     ENDDO
                  ENDDO
               ELSE
@@ -261,7 +255,6 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
         !    If we have a US pseudopotential we compute here the becsum term
         !
               w1 = wg (ibnd, ik)
-              w1 = w1 * et (ibnd, ik) ! now this integrate on energy
               ijkb0 = 0
               DO np = 1, ntyp
                 IF (upf(np)%tvanp  ) THEN

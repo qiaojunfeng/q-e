@@ -84,7 +84,6 @@ SUBROUTINE  partialdos (Emin, Emax, DeltaE, kresolveddos, filpdos)
      !
   ELSE
      !
-     !
      DO ik = 1,nkstot
         !
         IF (kresolveddos) THEN
@@ -263,7 +262,7 @@ SUBROUTINE  partialdos (Emin, Emax, DeltaE, kresolveddos, filpdos)
 END SUBROUTINE partialdos
 !
 !-----------------------------------------------------------------------
-SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
+SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos)
   !-----------------------------------------------------------------------
   !
   USE io_global,  ONLY : stdout
@@ -282,7 +281,6 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
   CHARACTER (len=256) :: filpdos
   REAL(DP) :: Emin, Emax, DeltaE
   LOGICAL :: kresolveddos
-  REAL(DP) :: ef_0
   !
   CHARACTER (len=33) :: filextension
   CHARACTER (len=256):: fileout
@@ -295,9 +293,6 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
        ldos(:,:,:)
   REAL(DP), EXTERNAL :: w0gauss
   !
-  !
-  REAL(DP) :: psum
-  REAL(DP), ALLOCATABLE :: eband_k(:)
   !
   ! find band extrema
   !
@@ -350,7 +345,6 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
      END IF
      !
   ELSE
-     allocate(eband_k(nkstot))
      DO ik = 1,nkstot
         !
         IF (kresolveddos) THEN
@@ -364,10 +358,6 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
         ENDIF
         !
         DO ibnd = 1, nbnd
-           ! junfeng qiao, assume all kpts weight is identical
-           psum = 1/nkstot * (et(ibnd,ik)*rytoev - ef_0) ! unit is eV
-           eband_k(ik) = eband_k(ik) + psum
-           ! junfeng qiao
            etev = et(ibnd,ik)
            ie_mid = nint( (etev-Emin)/DeltaE )
            DO ie = max(ie_mid-ie_delta, 0), min(ie_mid+ie_delta, ne)
@@ -574,7 +564,7 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
            WRITE (4,'(i5," ")', advance="NO") ik
         ENDIF
         etev = Emin + ie * DeltaE
-        WRITE (4,'(f7.3,4e18.10)') etev*rytoev, dostot(ie,ik), &
+        WRITE (4,'(f7.3,4e11.3)') etev*rytoev, dostot(ie,ik), &
              (pdostot(ie,is,ik), is=1,nspin0)
      ENDDO
      IF (kresolveddos) WRITE (4,*)
@@ -585,15 +575,6 @@ SUBROUTINE  partialdos_nc (Emin, Emax, DeltaE, kresolveddos, filpdos, ef_0)
   !
   DEALLOCATE (nlmchi)
   DEALLOCATE (proj)
-  !
-    open(22, file=trim(filpdos)//".eband_k.dat",form='formatted', status='unknown')
-    write(22, '("# mae decomposed in kpt, unit is meV, already multiplied by kpt weight")')
-    write(22, '("sum(eband_k) = ", f18.10, "  eV")') sum(eband_k(:))
-    write(22, '("ef_0 = ", f18.10, "  eV")') ef_0
-    do ik = 1, nkstot
-      write(22, '(f18.10)') eband_k(ik) * 1000    ! unit is meV
-    end do
-    close(22)
   !
   RETURN
 END SUBROUTINE partialdos_nc
