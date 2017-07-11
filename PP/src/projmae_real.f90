@@ -36,7 +36,7 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   USE noncollin_module, ONLY : i_cons
   USE paw_variables, ONLY : okpaw
   USE mp,        ONLY : mp_bcast
-  USE mp_world,  ONLY : world_comm
+  USE mp_world,  ONLY : world_comm, mpime
   USE constants, ONLY : rytoev
   USE parameters, ONLY : npk
   USE io_global, ONLY : stdout
@@ -186,16 +186,17 @@ SUBROUTINE extract_psi (plot_files,plot_num)
     DO ikpt=kpoint(1), kpoint(2)
       DO ibnd=kband(1), kband(2)
         DO ispin=spin_component(1), spin_component(2)
-          WRITE( *, '("before punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
+          !WRITE( *, '("before punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
           CALL punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
             emin, emax, ikpt, ibnd, ispin, lsign)
-          WRITE( *, '("after punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
+          !WRITE( *, '("after punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
 #if defined(__MPI)
           psi = psi * omega / (dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x)
 #else
           psi = psi * omega / (dfftp%nnr)
 #endif
-          write(*, '("     sum(|psi(r)|^2) = ", f18.6)'), sum(psi(:))  ! should be 1
+          write(*, '("     processor index ", i3, "   sum(|psi(r)|^2) = ", f18.6)') &
+                mpime, sum(psi(:))  ! should be 1
           eband_r = eband_r + wg(ibnd, ikpt) * (et(ibnd, ikpt)-ef_0) * psi
           eband_tot = eband_tot + wg(ibnd, ikpt) * (et(ibnd, ikpt)-ef_0)
           WRITE( stdout, 9000 ) get_clock( 'extract_psi' )
@@ -206,7 +207,8 @@ SUBROUTINE extract_psi (plot_files,plot_num)
    eband_r = eband_r * rytoev
    write(*, '("eband_tot = ", f18.10, "   eV")') eband_tot*rytoev
    write(*, '("sum(eband_r) = ", f18.10, "   eV")') sum(eband_r(:))
-   write(*, '("save real space resolved mae to ", a, ", unit is meV")') TRIM(plot_files(1))
+   write(*, '("save real space resolved mae to ", a, ", unit is meV")') &
+         TRIM(plot_files(1))
    eband_r = eband_r * 1000  ! unit is meV
    call punch_plot_save(TRIM(plot_files(1)), plot_num, eband_r)
 
@@ -289,13 +291,13 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
      IF (noncolin) THEN
         IF (spin_component==0) THEN
   WRITE( *, '("before local_dos time is ", F10.1)') get_clock('extract_psi')
-           CALL local_dos (0, lsign, kpoint, kband, spin_component, emin, emax, raux)
+           CALL local_dos_psi ( kpoint, kband, spin_component, raux)
   WRITE( *, '("after local_dos time is ", F10.1)') get_clock('extract_psi')
         ELSE
            CALL local_dos_mag (spin_component, kpoint, kband, raux)
         ENDIF
      ELSE
-        CALL local_dos (0, lsign, kpoint, kband, spin_component, emin, emax, raux)
+        CALL errore('postproc','noncolin = .false. not implemented',0)
      ENDIF
 
 
@@ -358,6 +360,267 @@ SUBROUTINE punch_plot_save (filplot, plot_num, raux)
 
   RETURN
 END SUBROUTINE punch_plot_save
+
+SUBROUTINE local_dos_psi ( kpoint, kband, spin_component, dos)
+  !--------------------------------------------------------------------
+  !
+  !     iflag=0: calculates |psi|^2 for band "kband" at point "kpoint"
+  !     spin_component: for iflag=3 and LSDA calculations only
+  !                     0 for up+down dos,  1 for up dos, 2 for down dos
+  !
+  USE kinds,                ONLY : DP
+  USE cell_base,            ONLY : omega
+  USE ions_base,            ONLY : nat, ntyp => nsp, ityp
+  USE ener,                 ONLY : ef
+  USE fft_base,             ONLY : dffts, dfftp
+  USE fft_interfaces,       ONLY : fwfft, invfft
+  USE gvect,                ONLY : nl, ngm, g
+  USE gvecs,                ONLY : nls, nlsm, doublegrid
+  USE klist,                ONLY : lgauss, degauss, ngauss, nks, wk, xk, &
+                                   nkstot, ngk, igk_k
+  USE lsda_mod,             ONLY : lsda, nspin, current_spin, isk
+  USE scf,                  ONLY : rho
+  USE symme,                ONLY : sym_rho, sym_rho_init, sym_rho_deallocate
+  USE uspp,                 ONLY : nkb, vkb, becsum, nhtol, nhtoj, indv
+  USE uspp_param,           ONLY : upf, nh, nhm
+  USE wavefunctions_module, ONLY : evc, psic, psic_nc
+  USE wvfct,                ONLY : nbnd, npwx, et
+  USE control_flags,        ONLY : gamma_only
+  USE noncollin_module,     ONLY : noncolin, npol
+  USE spin_orb,             ONLY : lspinorb, fcoef
+  USE io_files,             ONLY : iunwfc, nwordwfc
+  USE mp_global,            ONLY : me_pool, nproc_pool, my_pool_id, npool
+  USE mp,                   ONLY : mp_bcast, mp_sum
+  USE mp_global,            ONLY : inter_pool_comm, intra_pool_comm
+  USE becmod,               ONLY : calbec
+  USE control_flags,        ONLY : tqr
+  USE realus,               ONLY : addusdens_r
+  IMPLICIT NONE
+  !
+  ! input variables
+  !
+  INTEGER, INTENT(in) ::  kpoint, kband, spin_component
+  !
+  REAL(DP), INTENT(out) :: dos (dfftp%nnr)
+  !
+  !    local variables
+  !
+  ! counters for US PPs
+  INTEGER :: npw, ikb, jkb, ijkb0, ih, jh, kh, na, ijh, np
+  ! counters
+  INTEGER :: ir, is, ig, ibnd, ik, irm, isup, isdw, ipol, kkb, is1, is2
+
+  REAL(DP) :: w, w1, modulus
+  REAL(DP), ALLOCATABLE :: maxmod(:)
+  COMPLEX(DP), ALLOCATABLE ::  becp_nc(:,:,:), be1(:,:), be2(:,:)
+  INTEGER :: who_calculate, iproc
+  COMPLEX(DP) :: phase
+  LOGICAL :: i_am_the_pool
+  INTEGER :: which_pool, kpoint_pool
+  REAL(DP), EXTERNAL :: get_clock
+  REAL(DP) :: wg_this
+  !
+  ! input checks
+  !
+  IF ( .not. noncolin ) CALL errore('local_dos', 'not implemented', 1)
+  IF (gamma_only) CALL errore('local_dos','not available',1)
+  !
+  IF ( ( kband < 1 .or. kband > nbnd ) ) &
+       CALL errore ('local_dos', 'wrong band specified', 1)
+  IF ( ( kpoint < 1 .or. kpoint > nkstot ) ) &
+       CALL errore ('local_dos', 'wrong kpoint specified', 1)
+  !
+        ALLOCATE (becp_nc(nkb,npol,nbnd))
+        IF (lspinorb) THEN
+          ALLOCATE(be1(nhm,2))
+          ALLOCATE(be2(nhm,2))
+        ENDIF
+
+  rho%of_r(:,:) = 0.d0
+  dos(:) = 0.d0
+  becsum(:,:,:) = 0.d0
+  !
+  !   calculate the correct weights
+  !
+  wg_this  = 0.d0
+
+  IF ( npool > 1 ) THEN
+     CALL xk_pool( kpoint, nkstot, kpoint_pool,  which_pool )
+     IF ( kpoint_pool < 1 .or. kpoint_pool > nks ) &
+        CALL errore('local_dos','problems with xk_pool',1)
+     i_am_the_pool=(my_pool_id==which_pool)
+  ELSE
+     i_am_the_pool=.true.
+     kpoint_pool=kpoint
+  ENDIF
+
+  IF (i_am_the_pool) wg_this = 1.d0
+  !
+  !     here we sum for each k point the contribution
+  !     of the wavefunctions to the density of states
+  !
+  ik = kpoint_pool
+     IF (i_am_the_pool) THEN
+        IF (lsda) current_spin = isk (ik)
+        CALL davcio (evc, 2*nwordwfc, iunwfc, ik, - 1)
+        npw = ngk(ik)
+        CALL init_us_2 (npw, igk_k(1,ik), xk (1, ik), vkb)
+
+           CALL calbec ( npw, vkb, evc, becp_nc )
+
+WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
+
+     !
+     !     here we compute the density of states
+     !
+        ibnd = kband
+         ! Neglect summands with relative weights below machine epsilon
+         IF ( wg_this > epsilon(0.0_DP) ) THEN
+
+                 psic_nc = (0.d0,0.d0)
+                 DO ig = 1, npw
+                    psic_nc(nls(igk_k(ig,ik)),1)=evc(ig     ,ibnd)
+                    psic_nc(nls(igk_k(ig,ik)),2)=evc(ig+npwx,ibnd)
+                 ENDDO
+                 DO ipol=1,npol
+                    CALL invfft ('Wave', psic_nc(:,ipol), dffts)
+                 ENDDO
+
+              w1 = wg_this / omega
+
+                 DO ipol=1,npol
+                    DO ir=1,dffts%nnr
+                       rho%of_r(ir,current_spin)=rho%of_r(ir,current_spin)+&
+                          w1*(dble(psic_nc(ir,ipol))**2+ &
+                             aimag(psic_nc(ir,ipol))**2)
+                    ENDDO
+                 ENDDO
+
+        !
+        !    If we have a US pseudopotential we compute here the becsum term
+        !
+              w1 = wg_this
+              ijkb0 = 0
+              DO np = 1, ntyp
+                IF (upf(np)%tvanp  ) THEN
+                  DO na = 1, nat
+                    IF (ityp (na) == np) THEN
+
+                        IF (upf(np)%has_so) THEN
+                          be1=(0.d0,0.d0)
+                          be2=(0.d0,0.d0)
+                          DO ih = 1, nh(np)
+                            ikb = ijkb0 + ih
+                            DO kh = 1, nh(np)
+                              IF ((nhtol(kh,np)==nhtol(ih,np)).and. &
+                                  (nhtoj(kh,np)==nhtoj(ih,np)).and. &
+                                  (indv(kh,np)==indv(ih,np))) THEN
+                                 kkb=ijkb0 + kh
+                                 DO is1=1,2
+                                   DO is2=1,2
+                                     be1(ih,is1)=be1(ih,is1)+ &
+                                           fcoef(ih,kh,is1,is2,np)* &
+                                           becp_nc(kkb,is2,ibnd)
+                                     be2(ih,is1)=be2(ih,is1)+ &
+                                           fcoef(kh,ih,is2,is1,np)* &
+                                        conjg(becp_nc(kkb,is2,ibnd))
+                                   ENDDO
+                                 ENDDO
+                              ENDIF
+                            ENDDO
+                          ENDDO
+                        ENDIF
+                        ijh = 1
+                        DO ih = 1, nh (np)
+                          ikb = ijkb0 + ih
+                          IF (upf(np)%has_so) THEN
+                            becsum(ijh,na,1)=becsum(ijh,na,1)+ w1*    &
+                               (be1(ih,1)*be2(ih,1)+be1(ih,2)*be2(ih,2))
+                          ELSE
+                            becsum(ijh,na,1) = becsum(ijh,na,1)+  &
+                             w1*(conjg(becp_nc(ikb,1,ibnd))*      &
+                                       becp_nc(ikb,1,ibnd)+       &
+                                 conjg(becp_nc(ikb,2,ibnd))*      &
+                                       becp_nc(ikb,2,ibnd))
+                          ENDIF
+                          ijh = ijh + 1
+                          DO jh = ih + 1, nh (np)
+                            jkb = ijkb0 + jh
+                            IF (upf(np)%has_so) THEN
+                              becsum(ijh,na,1)=becsum(ijh,na,1) &
+                                 + w1*((be1(jh,1)*be2(ih,1)+   &
+                                        be1(jh,2)*be2(ih,2))+  &
+                                       (be1(ih,1)*be2(jh,1)+   &
+                                        be1(ih,2)*be2(jh,2)) )
+                            ELSE
+                              becsum(ijh,na,1)= becsum(ijh,na,1)+ &
+                                   w1*2.d0*dble(conjg(becp_nc(ikb,1,ibnd)) &
+                                     *becp_nc(jkb,1,ibnd) + &
+                                conjg(becp_nc(ikb,2,ibnd)) &
+                                     *becp_nc(jkb,2,ibnd) )
+                            ENDIF
+                            ijh = ijh + 1
+                          ENDDO
+                        ENDDO
+
+                      ijkb0 = ijkb0 + nh (np)
+                    ENDIF
+                  ENDDO
+                ELSE
+                  DO na = 1, nat
+                    IF (ityp (na) == np) ijkb0 = ijkb0 + nh (np)
+                  ENDDO
+                ENDIF
+              ENDDO
+           ENDIF
+        ! loop over bands
+    ENDIF
+  ! loop over k-points
+
+
+
+        IF (lspinorb) THEN
+           DEALLOCATE(be1)
+           DEALLOCATE(be2)
+        ENDIF
+        DEALLOCATE(becp_nc)
+
+  IF (doublegrid) THEN
+
+       CALL interpolate(rho%of_r, rho%of_r, 1)
+
+  ENDIF
+  !
+  !    Here we add the US contribution to the charge
+  !
+  IF ( tqr ) THEN
+   CALL addusdens_r(rho%of_r(:,:),.false.)
+  ELSE
+  !
+  CALL addusdens(rho%of_r(:,:))
+  !
+  ENDIF
+  !
+  IF (nspin == 1 .or. nspin==4) THEN
+     is = 1
+     dos(:) = rho%of_r (:, is)
+  ELSE
+
+        isup = 1
+        isdw = 2
+        dos(:) = rho%of_r (:, isup) + rho%of_r (:, isdw)
+
+  ENDIF
+
+#if defined(__MPI)
+  !WRITE( *, '("before local_dos:mp_sum time is ", F10.1)') get_clock('extract_psi')
+  CALL mp_sum( dos, inter_pool_comm )
+  !WRITE( *, '("after local_dos:mp_sum time is ", F10.1)') get_clock('extract_psi')
+#endif
+
+  RETURN
+
+END SUBROUTINE local_dos_psi
 
 END MODULE projmae_module
 !
