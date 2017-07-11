@@ -22,7 +22,7 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   !    DESCRIPTION of the INPUT: see file Doc/INPUT_PP
   !
   USE kinds,     ONLY : DP
-  USE cell_base, ONLY : bg
+  USE cell_base, ONLY : bg, omega
   USE ener,      ONLY : ef
   USE ions_base, ONLY : nat, ntyp=>nsp, ityp, tau
   USE gvect
@@ -73,6 +73,9 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   REAL(DP), ALLOCATABLE :: psi(:), eband_r(:)
   REAL(DP) :: ef_0, eband_tot
   !   set default values for variables in namelist
+  REAL(DP), EXTERNAL :: get_clock
+  !
+  CALL start_clock('extract_psi')
   !
   prefix = 'pwscf'
   CALL get_environment_variable( 'ESPRESSO_TMPDIR', outdir )
@@ -161,30 +164,41 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   plot_files(1) = filplot
 
   ! 
-  kpoint(1) = 0
+  kpoint(1) = 1
   kpoint(2) = nkstot
-  kband(1) = 0
+  kband(1) = 1
   kband(2) = nbnd
 #if defined(__MPI)
+  write(*, '("nr1x = ", i4, ", nr2x = ", i4, ", nr3x = ", i4)') &
+        dfftp%nr1x, dfftp%nr2x, dfftp%nr3x
   allocate(psi(dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
   allocate(eband_r(dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
 #else
+  write(*, '("nnr = ", i4)') dfftp%nnr
   allocate(psi(dfftp%nnr))
   allocate(eband_r(dfftp%nnr))
 #endif
-  write(*, '("kpoint(1) = ", i4, "kpoint(2) = ", i4)') kpoint(1), kpoint(2)
-  write(*, '("kband(1) = ", i4, "kband(2) = ", i4)') kband(1), kband(2)
+  write(*, '("kpoint(1) = ", i4, "  kpoint(2) = ", i4)') kpoint(1), kpoint(2)
+  write(*, '("kband(1) = ", i4, "   kband(2) = ", i4)') kband(1), kband(2)
   eband_r = 0.0_DP
   eband_tot = 0.0_DP
   ! Plot multiple KS orbitals in one go
     DO ikpt=kpoint(1), kpoint(2)
       DO ibnd=kband(1), kband(2)
         DO ispin=spin_component(1), spin_component(2)
+          WRITE( *, '("before punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
           CALL punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
             emin, emax, ikpt, ibnd, ispin, lsign)
-          write(*, '(" sum(|psi(r)|^2) = ", f10.6)'), sum(psi(:))
+          WRITE( *, '("after punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
+#if defined(__MPI)
+          psi = psi * omega / (dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x)
+#else
+          psi = psi * omega / (dfftp%nnr)
+#endif
+          write(*, '("     sum(|psi(r)|^2) = ", f18.6)'), sum(psi(:))  ! should be 1
           eband_r = eband_r + wg(ibnd, ikpt) * (et(ibnd, ikpt)-ef_0) * psi
           eband_tot = eband_tot + wg(ibnd, ikpt) * (et(ibnd, ikpt)-ef_0)
+          WRITE( stdout, 9000 ) get_clock( 'extract_psi' )
         ENDDO
       ENDDO
     ENDDO
@@ -198,6 +212,10 @@ SUBROUTINE extract_psi (plot_files,plot_num)
 
   deallocate(psi)
   deallocate(eband_r)
+
+9000 FORMAT( '     total cpu time spent up to now is ',F10.1,' secs' )
+
+  CALL stop_clock('extract_psi')
   !
 END SUBROUTINE extract_psi
 
@@ -247,13 +265,14 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
 #endif
   ! auxiliary vector
   REAL(DP), ALLOCATABLE :: raux (:), raux2(:,:)
+  REAL(DP), EXTERNAL :: get_clock
 
 
 #if defined(__MPI)
   ALLOCATE (raux1(  dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
 #endif
 
-  WRITE( stdout, '(/5x,"Calling punch_plot, plot_num = ",i3)') plot_num
+  !WRITE( stdout, '(/5x,"Calling punch_plot, plot_num = ",i3)') plot_num
       WRITE( stdout, '(/5x,"Plotting k_point = ",i3,"  band =", i3  )') &
                                                    kpoint, kband
   IF (noncolin .and. spin_component /= 0 ) &
@@ -269,7 +288,9 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
 
      IF (noncolin) THEN
         IF (spin_component==0) THEN
+  WRITE( *, '("before local_dos time is ", F10.1)') get_clock('extract_psi')
            CALL local_dos (0, lsign, kpoint, kband, spin_component, emin, emax, raux)
+  WRITE( *, '("after local_dos time is ", F10.1)') get_clock('extract_psi')
         ELSE
            CALL local_dos_mag (spin_component, kpoint, kband, raux)
         ENDIF
@@ -378,7 +399,7 @@ PROGRAM projmae_real
   !
   CALL extract_psi (plot_files, plot_num)
   !
-  CALL chdens (plot_files, plot_num)
+  !CALL chdens (plot_files, plot_num)
   !
   CALL environment_end ( 'POST-PROC' )
   !

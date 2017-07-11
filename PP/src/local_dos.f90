@@ -76,6 +76,7 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
   REAL(DP), EXTERNAL :: w0gauss, w1gauss
   LOGICAL :: i_am_the_pool
   INTEGER :: which_pool, kpoint_pool
+  REAL(DP), EXTERNAL :: get_clock
   !
   ! input checks
   !
@@ -410,7 +411,9 @@ SUBROUTINE local_dos (iflag, lsign, kpoint, kband, spin_component, &
      DEALLOCATE(segno)
   ENDIF
 #if defined(__MPI)
+  WRITE( *, '("before local_dos:mp_sum time is ", F10.1)') get_clock('extract_psi')
   CALL mp_sum( dos, inter_pool_comm )
+  WRITE( *, '("after local_dos:mp_sum time is ", F10.1)') get_clock('extract_psi')
 #endif
 
   IF (iflag == 0 .or. gamma_only) RETURN
