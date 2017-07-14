@@ -63,6 +63,7 @@ SUBROUTINE extract (plot_files,plot_num)
 
   ! directory for temporary files
   CHARACTER(len=256) :: outdir
+  REAL(DP), EXTERNAL :: get_clock
 
   NAMELIST / inputpp / outdir, prefix, plot_num, sample_bias, &
       spin_component, z, dz, emin, emax, delta_e, degauss_ldos, kpoint, kband, &
@@ -220,6 +221,7 @@ SUBROUTINE extract (plot_files,plot_num)
             TRIM(filplot), "_K", ikpt, "_B", ibnd, TRIM(spin_desc(ispin))
           CALL punch_plot (TRIM(plot_files(iplot)), plot_num, sample_bias, z, dz, &
             emin, emax, ikpt, ibnd, ispin, lsign)
+            write(stdout, '("time is ", F10.1)') get_clock("POST-PROC")
           iplot = iplot + 1
         ENDDO
       ENDDO

@@ -95,7 +95,7 @@ SUBROUTINE xsf_fast_datagrid_3d &
               count = count + 1
               !ind(count) = ii
            ELSE
-              WRITE(ounit,'(6e17.9)') &
+              WRITE(ounit,'(6(1pe17.9))') &
                    (rho(ind_x(i),ind_y(i),ind_z(i)),i=1,6)
               count=1
               !ind(count) = ii
@@ -106,7 +106,7 @@ SUBROUTINE xsf_fast_datagrid_3d &
         ENDDO
      ENDDO
   ENDDO
-  WRITE(ounit,'(6e17.9:)') (rho(ind_x(i),ind_y(i),ind_z(i)),i=1,count)
+  WRITE(ounit,'(6(1pe17.9:))') (rho(ind_x(i),ind_y(i),ind_z(i)),i=1,count)
   WRITE(ounit,'(a)') 'END_DATAGRID_3D'
   WRITE(ounit,'(a)') 'END_BLOCK_DATAGRID_3D'
   RETURN

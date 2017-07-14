@@ -35,8 +35,9 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   USE control_flags, ONLY : twfcollect
   USE noncollin_module, ONLY : i_cons
   USE paw_variables, ONLY : okpaw
-  USE mp,        ONLY : mp_bcast
-  USE mp_world,  ONLY : world_comm, mpime
+  USE mp,        ONLY : mp_bcast, mp_sum
+  USE mp_world,  ONLY : world_comm, mpime, nproc
+  USE mp_pools,  ONLY : intra_pool_comm
   USE constants, ONLY : rytoev
   USE parameters, ONLY : npk
   USE io_global, ONLY : stdout
@@ -74,6 +75,7 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   REAL(DP) :: ef_0, eband_tot
   !   set default values for variables in namelist
   REAL(DP), EXTERNAL :: get_clock
+  integer :: band_per_proc, band_left
   !
   CALL start_clock('extract_psi')
   !
@@ -164,29 +166,66 @@ SUBROUTINE extract_psi (plot_files,plot_num)
   plot_files(1) = filplot
 
   ! 
+
+#if defined(__MPI)
+  if (ionode) then
+    write(stdout, '("nr1x = ", i4, ", nr2x = ", i4, ", nr3x = ", i4)') &
+          dfftp%nr1x, dfftp%nr2x, dfftp%nr3x
+  endif
+  allocate(psi(dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
+  allocate(eband_r(dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
+#else
+  write(stdout, '("nnr = ", i4)') dfftp%nnr
+  allocate(psi(dfftp%nnr))
+  allocate(eband_r(dfftp%nnr))
+#endif
+
+#if defined(__MPI)
+! synchronize output
+  if (ionode) then
+    kpoint(1) = 1
+    kpoint(2) = nkstot
+    kband(1) = 1
+    kband(2) = nbnd
+  endif
+  write(stdout, '("kpoint(1) = ", i4, "  kpoint(2) = ", i4)') kpoint(1), kpoint(2)
+  write(stdout, '("kband(1) = ", i4, "   kband(2) = ", i4)') kband(1), kband(2)
+  write(stdout, '(a)') NEW_LINE('a')
+  call mp_bcast(kpoint, ionode_id, world_comm)
+  call mp_bcast(kband, ionode_id, world_comm)
+#else
   kpoint(1) = 1
   kpoint(2) = nkstot
   kband(1) = 1
   kband(2) = nbnd
-#if defined(__MPI)
-  write(*, '("nr1x = ", i4, ", nr2x = ", i4, ", nr3x = ", i4)') &
-        dfftp%nr1x, dfftp%nr2x, dfftp%nr3x
-  allocate(psi(dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
-  allocate(eband_r(dfftp%nr1x *  dfftp%nr2x *  dfftp%nr3x))
-#else
-  write(*, '("nnr = ", i4)') dfftp%nnr
-  allocate(psi(dfftp%nnr))
-  allocate(eband_r(dfftp%nnr))
+  write(stdout, '("kpoint(1) = ", i4, "  kpoint(2) = ", i4)') kpoint(1), kpoint(2)
+  write(stdout, '("kband(1) = ", i4, "   kband(2) = ", i4)') kband(1), kband(2)
+  write(stdout, '(a)') NEW_LINE('a')
 #endif
-  write(*, '("kpoint(1) = ", i4, "  kpoint(2) = ", i4)') kpoint(1), kpoint(2)
-  write(*, '("kband(1) = ", i4, "   kband(2) = ", i4)') kband(1), kband(2)
+
   eband_r = 0.0_DP
   eband_tot = 0.0_DP
+  band_per_proc = nbnd / nproc    ! is integer
+  band_left = nbnd - nproc*band_per_proc  ! integer
   ! Plot multiple KS orbitals in one go
     DO ikpt=kpoint(1), kpoint(2)
+      !if (mpime < band_left) then
+      !  kband(1) = mpime * (band_per_proc + 1) + 1
+      !  kband(2) = (mpime + 1) * ( 1 + band_per_proc)
+      !else
+      !  kband(1) = band_left + mpime * band_per_proc + 1
+      !  kband(2) = band_left + (mpime+1) * band_per_proc
+      !endif
       DO ibnd=kband(1), kband(2)
         DO ispin=spin_component(1), spin_component(2)
           !WRITE( *, '("before punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
+          WRITE(*, '("proc ind ", i3, " calling ikpt ", i3, " ibnd ", i3, " time is ", F10.1, " wg(ibnd,ikpt) = ", F8.6)') &
+                mpime, ikpt, ibnd, get_clock('extract_psi'), wg(ibnd,ikpt)
+          if ( abs(wg(ibnd, ikpt) * et(ibnd, ikpt)) < 1.0d-8 ) then
+            write(stdout, '("wg*et = ", f18.6, " < 1.0d-8, pass")') wg(ibnd, ikpt) * et(ibnd, ikpt)
+            WRITE( stdout, '(a)') NEW_LINE('a')
+            cycle
+          endif
           CALL punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
             emin, emax, ikpt, ibnd, ispin, lsign)
           !WRITE( *, '("after punch_plot_psi time is ", F10.1)') get_clock('extract_psi')
@@ -195,19 +234,23 @@ SUBROUTINE extract_psi (plot_files,plot_num)
 #else
           psi = psi * omega / (dfftp%nnr)
 #endif
-          write(*, '("     processor index ", i3, "   sum(|psi(r)|^2) = ", f18.6)') &
-                mpime, sum(psi(:))  ! should be 1
+          write(*, '("  proc ind ", i3, ", ikpt ", i3, ", ibnd ", i3, " wg(ibnd,ikpt) = ", F8.6, " sum(|psi(r)|^2) = ", f18.6)') &
+                mpime, ikpt, ibnd, wg(ibnd,ikpt), sum(psi(:))  ! should be 1
           eband_r = eband_r + wg(ibnd, ikpt) * (et(ibnd, ikpt)-ef_0) * psi
           eband_tot = eband_tot + wg(ibnd, ikpt) * (et(ibnd, ikpt)-ef_0)
           WRITE( stdout, 9000 ) get_clock( 'extract_psi' )
+          WRITE( stdout, '(a)') NEW_LINE('a')
         ENDDO
       ENDDO
     ENDDO
 
+   ! only allow one pool !!!
+   !CALL mp_sum( eband_r, intra_pool_comm )
+   !CALL mp_sum( eband_tot, intra_pool_comm )
    eband_r = eband_r * rytoev
-   write(*, '("eband_tot = ", f18.10, "   eV")') eband_tot*rytoev
-   write(*, '("sum(eband_r) = ", f18.10, "   eV")') sum(eband_r(:))
-   write(*, '("save real space resolved mae to ", a, ", unit is meV")') &
+   write(stdout, '("eband_tot = ", f18.10, "   eV")') eband_tot*rytoev
+   write(stdout, '("sum(eband_r) = ", f18.10, "   eV")') sum(eband_r(:))
+   write(stdout, '("save real space resolved mae to ", a, ", unit is meV")') &
          TRIM(plot_files(1))
    eband_r = eband_r * 1000  ! unit is meV
    call punch_plot_save(TRIM(plot_files(1)), plot_num, eband_r)
@@ -252,9 +295,10 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
   USE gvecw,            ONLY : ecutwfc
   USE noncollin_module, ONLY : noncolin
   USE paw_postproc,     ONLY : PAW_make_ae_charge
+  USE mp_world,  ONLY : mpime
 
   IMPLICIT NONE
-  REAL(DP), INTENT(OUT) :: psi(:)
+  REAL(DP), INTENT(INOUT) :: psi(:)
   INTEGER, INTENT(IN) :: plot_num, kpoint, kband, spin_component
   LOGICAL, INTENT(IN) :: lsign
   REAL(DP), INTENT(IN) :: sample_bias, z, dz, &
@@ -275,8 +319,8 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
 #endif
 
   !WRITE( stdout, '(/5x,"Calling punch_plot, plot_num = ",i3)') plot_num
-      WRITE( stdout, '(/5x,"Plotting k_point = ",i3,"  band =", i3  )') &
-                                                   kpoint, kband
+      !WRITE( stdout, '(/5x,"Plotting k_point = ",i3,"  band =", i3  )') &
+      !                                             kpoint, kband
   IF (noncolin .and. spin_component /= 0 ) &
      WRITE( stdout, '(/5x,"Plotting spin magnetization ipol = ",i3)') &
                                                           spin_component
@@ -290,9 +334,10 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
 
      IF (noncolin) THEN
         IF (spin_component==0) THEN
-  WRITE( *, '("before local_dos time is ", F10.1)') get_clock('extract_psi')
+  !WRITE( stdout, '("before local_dos time is ", F10.1)') get_clock('extract_psi')
+           !CALL local_dos (0, lsign, kpoint, kband, spin_component, emin, emax, raux)
            CALL local_dos_psi ( kpoint, kband, spin_component, raux)
-  WRITE( *, '("after local_dos time is ", F10.1)') get_clock('extract_psi')
+  !WRITE( stdout, '("after local_dos time is ", F10.1)') get_clock('extract_psi')
         ELSE
            CALL local_dos_mag (spin_component, kpoint, kband, raux)
         ENDIF
@@ -302,8 +347,8 @@ SUBROUTINE punch_plot_psi (psi, plot_num, sample_bias, z, dz, &
 
 
 #if defined(__MPI)
-  IF (.not. (plot_num == 5 ) ) CALL gather_grid (dfftp, raux, raux1)
-  IF ( ionode ) &
+  CALL gather_grid (dfftp, raux, raux1)
+  IF ( mpime == dfftp%root ) &
      psi = raux1
   DEALLOCATE (raux1)
 #else
@@ -395,6 +440,7 @@ SUBROUTINE local_dos_psi ( kpoint, kband, spin_component, dos)
   USE becmod,               ONLY : calbec
   USE control_flags,        ONLY : tqr
   USE realus,               ONLY : addusdens_r
+  USE io_global, ONLY : stdout
   IMPLICIT NONE
   !
   ! input variables
@@ -468,7 +514,7 @@ SUBROUTINE local_dos_psi ( kpoint, kband, spin_component, dos)
 
            CALL calbec ( npw, vkb, evc, becp_nc )
 
-WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
+!WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
 
      !
      !     here we compute the density of states
@@ -482,12 +528,16 @@ WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
                     psic_nc(nls(igk_k(ig,ik)),1)=evc(ig     ,ibnd)
                     psic_nc(nls(igk_k(ig,ik)),2)=evc(ig+npwx,ibnd)
                  ENDDO
+                 !write(*, '("npol is ", i3)') npol
+                 !write(*, '("before invfft ", F10.1)') get_clock('extract_psi')
                  DO ipol=1,npol
                     CALL invfft ('Wave', psic_nc(:,ipol), dffts)
                  ENDDO
+                 !write(*, '("after invfft ", F10.1)') get_clock('extract_psi')
 
               w1 = wg_this / omega
 
+                 !write(*, '("before rho%of_r ", F10.1)') get_clock('extract_psi')
                  DO ipol=1,npol
                     DO ir=1,dffts%nnr
                        rho%of_r(ir,current_spin)=rho%of_r(ir,current_spin)+&
@@ -495,14 +545,17 @@ WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
                              aimag(psic_nc(ir,ipol))**2)
                     ENDDO
                  ENDDO
+                 !write(*, '("after rho%of_r ", F10.1)') get_clock('extract_psi')
 
         !
         !    If we have a US pseudopotential we compute here the becsum term
         !
+              !write(*, '("before us ", F10.1)') get_clock('extract_psi')
               w1 = wg_this
               ijkb0 = 0
               DO np = 1, ntyp
                 IF (upf(np)%tvanp  ) THEN
+                  !write(*, '("upf(", i2, ")%tvanp = .true.")') np
                   DO na = 1, nat
                     IF (ityp (na) == np) THEN
 
@@ -572,6 +625,7 @@ WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
                   ENDDO
                 ENDIF
               ENDDO
+              !write(*, '("after us ", F10.1)') get_clock('extract_psi')
            ENDIF
         ! loop over bands
     ENDIF
@@ -586,20 +640,24 @@ WRITE( *, '("before ik ibnd loop time is ", F10.1)') get_clock('extract_psi')
         DEALLOCATE(becp_nc)
 
   IF (doublegrid) THEN
-
+     !write(*, '("doublegrid = .true.")')
        CALL interpolate(rho%of_r, rho%of_r, 1)
 
   ENDIF
   !
   !    Here we add the US contribution to the charge
   !
+  write(stdout, '("before addusdens ", F10.1)') get_clock('extract_psi')
+  !tqr = .true.
   IF ( tqr ) THEN
-   CALL addusdens_r(rho%of_r(:,:),.false.)
+    !write(*, '("tqr = .true.")')
+    CALL addusdens_r(rho%of_r(:,:),.false.)
   ELSE
-  !
+
   CALL addusdens(rho%of_r(:,:))
-  !
+
   ENDIF
+  write(stdout, '("after addusdens ", F10.1)') get_clock('extract_psi')
   !
   IF (nspin == 1 .or. nspin==4) THEN
      is = 1
