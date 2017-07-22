@@ -58,7 +58,7 @@ all : tldeps average.x bands.x dos.x epsilon.x initial_state.x fs.x \
       plan_avg.x plotband.x plotproj.x plotrho.x pmw.x pp.x projwfc.x \
       pawplot.x sumpdos.x pw2wannier90.x pw_export.x pw2gw.x \
       wannier_ham.x wannier_plot.x molecularpdos.x projmae.x projmae_real.x\
-      pw2bgw.x bgw2pw.x wfck2r.x importexport_binary.x projmae_r.x
+      pw2bgw.x bgw2pw.x wfck2r.x importexport_binary.x projmae_r.x plotproj_k.x
 
 
 libpp.a : $(PPOBJS) 
@@ -101,6 +101,11 @@ plotband.x : plotband.o libpp.a $(MODULES) $(LIBOBJS)
 plotproj.x : plotproj.o libpp.a $(MODULES) $(LIBOBJS)
 	$(LD) $(LDFLAGS) -o $@ \
 		plotproj.o libpp.a $(MODULES) $(LIBOBJS) $(LIBS)
+	- ( cd ../../bin ; ln -fs ../PP/src/$@ . )
+
+plotproj_k.x : plotproj_k.o libpp.a $(MODULES) $(LIBOBJS)
+	$(LD) $(LDFLAGS) -o $@ \
+		plotproj_k.o libpp.a $(MODULES) $(LIBOBJS) $(LIBS)
 	- ( cd ../../bin ; ln -fs ../PP/src/$@ . )
 
 plotrho.x : plotrho.o libpp.a $(MODULES) $(LIBOBJS)
